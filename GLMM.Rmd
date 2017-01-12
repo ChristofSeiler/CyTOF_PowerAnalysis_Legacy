@@ -1,0 +1,29 @@
+---
+title: "Power Analysis for CyTOF"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Goal
+
+Power is the probability that an estimated treatment effect is statistically significantly positive. The goal is to evaluate power as a function of the number of donors using simulated fake-data. Based on our assumptions, we setup a model, generate fake data, and set paramters. The paramters are taken from the Angelo et al. 2015[^1].
+
+## Generate Fake Data
+
+```{r}
+n_cell = 10000
+n_LTNP = 30
+n_CP = 30
+
+```
+
+## Fit Model and Calculate Power
+
+```{r}
+
+```
+
+[^1]: Angelo et al. 2015. Practical NK cell phenotyping and variability in healthy adults.
