@@ -1,10 +1,22 @@
 ---
-title: "Power Analysis for CyTOF"
+title: "Power Analysis for CyTOF Experiments"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Packages
+
+```{r}
+library(MCMCpack)
+library(mvtnorm)
+library(magrittr)
+library(stringr)
+library(STRINGdb)
+library(GGally)
+library(lme4)
 ```
 
 ## Goal
@@ -13,17 +25,103 @@ Power is the probability that an estimated treatment effect is statistically sig
 
 ## Generate Fake Data
 
+Fix samples sizes ``n`` and explanatory variable sizes ``p``.
+
 ```{r}
 n_cell = 10000
 n_LTNP = 30
 n_CP = 30
+```
 
+We can use the protein-protein interaction database [STRING](http://string-db.org/) to set ``Sigma``. Download proteins for human species (code is 9606). Consider interaciton that are 0.9 confidence. From the STRING website: In STRING, each protein-protein interaction is annotated with one or more 'scores'. Importantly, these scores do not indicate the strength or the specificity of the interaction. Instead, they are indicators of confidence, i.e. how likely STRING judges an interaction to be true, given the available evidence. All scores rank from 0 to 1, with 1 being the highest possible confidence. A score of 0.5 would indicate that roughly every second interaction might be erroneous (i.e., a false positive).
+
+```{r}
+markers = read.csv("markers.csv",stringsAsFactors = FALSE)
+head(markers)
+p = nrow(markers)
+p
+```
+
+Retrieve interactions from server.
+
+```{r}
+markers_mapped = string_db$map(markers, "gene_nk", removeUnmappedRows = FALSE)
+head(markers_mapped)
+interactions = string_db$get_interactions(markers_mapped$STRING_id)
+interactions = data.frame(from = interactions$from,
+                          to = interactions$to,
+                          combined_score = interactions$combined_score)
+interactions
+from_id = sapply(as.character(interactions$from),function(string_id) {
+  str_detect(string_id,markers_mapped$STRING_id) %>% which
+})
+to_id = sapply(as.character(interactions$to),function(string_id) {
+  str_detect(string_id,markers_mapped$STRING_id) %>% which
+})
+interactions = data.frame(interactions,from_id,to_id)
+head(interactions)
+adj_g = matrix(0,nrow = p,ncol = p)
+for(i in 1:nrow(interactions)) {
+  edge = interactions[i,]
+  adj_g[edge$from_id,edge$to_id] = 1
+}
+colnames(adj_g) = markers$protein_nk
+ggcorr(adj_g)
+```
+
+Draw coefficents for each donor.
+
+```{r}
+draw_X = function() {
+  precision = rgwish(n = 1,adj.g = adj_g,b = 3)[,,1]
+  X = rmvnorm(n = n_cell,sigma = chol2inv(chol(precision)))
+  colnames(X) = markers$protein_nk
+  X
+}
+X = draw_X()
+ggcorr(X)
+```
+
+Draw random vector.
+
+```{r}
+Sigma0 = diag(p)
+Sigma = riwish(v = v,S = Sigma0)
+y = rmvt(n = 1,sigma = Sigma,df = v) %>% t
 ```
 
 ## Fit Model and Calculate Power
 
 ```{r}
+fake_data = function() {
+  n_donors = 2
+  n_cell = 30
+  total_n_cells = n_donors*n_cell
+  treatment = sample( rep(0:1,n_cell) )
+  marker = rnorm(total_n_cells,mean = 1*treatment,sd = 1)
+  u = rlogis(n = total_n_cells,
+             location = marker,
+             scale = 1)
+  y = rep(0,length(u))
+  y[u > 0] = 1
+  data.frame(y,marker)
+}
+n_sim = 1000
+power = sapply(1:n_sim,function(i) {
+  alpha = 0.1
+  fake = fake_data()
+  formula = as.formula(y ~ marker)
+  res_glm = glm(formula,family = binomial(link='logit'), data = fake)
+  pvalues = summary(res_glm)$coefficients[-1,4]
+  mean(p.adjust(pvalues,method = "BH") < alpha)
+})
+mean(power)
+```
 
+## Session Info
+
+```{r}
+sessionInfo()
 ```
 
 [^1]: Angelo et al. 2015. Practical NK cell phenotyping and variability in healthy adults.
