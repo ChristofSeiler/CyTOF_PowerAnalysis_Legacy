@@ -17,6 +17,7 @@ library(stringr)
 library(STRINGdb)
 library(GGally)
 library(lme4)
+library(mbest)
 ```
 
 ## Goal
@@ -24,14 +25,6 @@ library(lme4)
 Power is the probability that an estimated treatment effect is statistically significantly positive. The goal is to evaluate power as a function of the number of donors using simulated fake-data. Based on our assumptions, we setup a model, generate fake data, and set paramters. The paramters are taken from the Angelo et al. 2015[^1].
 
 ## Generate Fake Data
-
-Fix samples sizes ``n`` and explanatory variable sizes ``p``.
-
-```{r}
-n_cell = 10000
-n_LTNP = 30
-n_CP = 30
-```
 
 We can use the protein-protein interaction database [STRING](http://string-db.org/) to set ``Sigma``. Download proteins for human species (code is 9606). Consider interaciton that are 0.9 confidence. From the STRING website: In STRING, each protein-protein interaction is annotated with one or more 'scores'. Importantly, these scores do not indicate the strength or the specificity of the interaction. Instead, they are indicators of confidence, i.e. how likely STRING judges an interaction to be true, given the available evidence. All scores rank from 0 to 1, with 1 being the highest possible confidence. A score of 0.5 would indicate that roughly every second interaction might be erroneous (i.e., a false positive).
 
@@ -92,26 +85,55 @@ y = rmvt(n = 1,sigma = Sigma,df = v) %>% t
 
 ## Fit Model and Calculate Power
 
+Fix samples sizes ``n`` and explanatory variable sizes ``p``.
+
+```{r}
+n_cell = 10000
+n_LTNP = 30
+n_CP = 30
+```
+
+Calculate power.
+
 ```{r}
 fake_data = function() {
   n_donors = 2
-  n_cell = 30
-  total_n_cells = n_donors*n_cell
-  treatment = sample( rep(0:1,n_cell) )
-  marker = rnorm(total_n_cells,mean = 1*treatment,sd = 1)
+  n_cells = 30
+  treatment = sample( rep(0:1,n_cells) )
+  # donor level
+  donors = lapply(1:n_donors,function(i) {
+    marker = rnorm(length(treatment),
+                   mean = 0*treatment,
+                   sd = 1)
+    data.frame(treatment=treatment,marker,donor=i)
+  })
+  df_donors = do.call(rbind,donors)
+  # population level
+  total_n_cells = nrow(df_donors)
+  marker = rnorm(total_n_cells,
+                 mean = 0*df_donors$treatment + df_donors$marker,
+                 sd = 1)
   u = rlogis(n = total_n_cells,
              location = marker,
              scale = 1)
   y = rep(0,length(u))
   y[u > 0] = 1
-  data.frame(y,marker)
+  data.frame(y=factor(y,labels = c("LTNP","CP")),
+             marker,
+             donor=factor(df_donors$donor))
 }
+ggplot(data = fake_data(), aes(x = y,y = marker,color = donor)) + 
+  geom_point(position=position_jitter(w=0.3,h=0), size=4)
 n_sim = 1000
 power = sapply(1:n_sim,function(i) {
   alpha = 0.1
   fake = fake_data()
   formula = as.formula(y ~ marker)
   res_glm = glm(formula,family = binomial(link='logit'), data = fake)
+  #res_glm = mhglm(y ~ marker + (marker | donor),
+  #                  family = binomial(link='logit'),
+  #                  data = fake,
+  #                  control = mhglm.control(parallel = TRUE,fit.method = 'firthglm.fit'))
   pvalues = summary(res_glm)$coefficients[-1,4]
   mean(p.adjust(pvalues,method = "BH") < alpha)
 })
