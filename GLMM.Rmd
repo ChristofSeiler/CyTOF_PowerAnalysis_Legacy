@@ -15,6 +15,7 @@ library(mvtnorm)
 library(magrittr)
 library(stringr)
 library(STRINGdb)
+library(ggplot2)
 library(GGally)
 library(lme4)
 library(mbest)
@@ -85,50 +86,60 @@ y = rmvt(n = 1,sigma = Sigma,df = v) %>% t
 
 ## Fit Model and Calculate Power
 
-Fix samples sizes ``n`` and explanatory variable sizes ``p``.
+Fix samples sizes ``n`` and explanatory variable sizes ``p``. Simulate data.
 
 ```{r}
-n_cell = 10000
-n_LTNP = 30
-n_CP = 30
+#inv_logit = function(u) {
+#  return(1 / (1 + exp(-u)));
+#}
+fake_data = function() {
+  # experimental design
+  n_donors = 1
+  n_cells = 100
+  donor = rep (1:n_donors, each=n_cells)
+  treatment = rep(c( rep(-.5,n_cells/2),rep(.5,n_cells/2)),n_donors)
+  # effect size
+  shift_donor = rep(0,n_donors)
+  shift_donor[1] = 0
+  shift_cell = 0
+  # donor level
+  explanatory_donor = NULL
+  for(j in 1:n_donors) {
+    explanatory_donor[j] = rnorm(n = 1,
+                                 mean = 0,
+                                 sd = 1)
+  }
+  # cell level
+  explanatory = response = NULL
+  for(i in 1:(n_donors*n_cells)) {
+    explanatory[i] = rnorm(n = 1,
+                           mean = treatment[i]*(shift_cell + explanatory_donor[donor[i]]*shift_donor[donor[i]]),
+                           sd = 1)
+    #response[i] = rbinom(n = 1,
+    #                     size = 1, 
+    #                     prob = inv_logit(explanatory[i]))
+    u = rlogis(n = 1,location = explanatory[i],scale = 1)
+    if(u > 0) response[i] = 1
+    if(u < 0) response[i] = 0
+  }
+  data.frame(response = factor(response,labels = c("LTNP","CP")),
+             treatment = factor(treatment,labels = c("LTNP","CP")),
+             explanatory,
+             donor = factor(donor))
+}
+test = fake_data()
+ggplot(test, aes(treatment,explanatory,color = donor)) + 
+  geom_point(position=position_jitter(w=0.3,h=0), size=4)
 ```
 
-Calculate power.
+Power analysis.
 
 ```{r}
-fake_data = function() {
-  n_donors = 2
-  n_cells = 30
-  treatment = sample( rep(0:1,n_cells) )
-  # donor level
-  donors = lapply(1:n_donors,function(i) {
-    marker = rnorm(length(treatment),
-                   mean = 0*treatment,
-                   sd = 1)
-    data.frame(treatment=treatment,marker,donor=i)
-  })
-  df_donors = do.call(rbind,donors)
-  # population level
-  total_n_cells = nrow(df_donors)
-  marker = rnorm(total_n_cells,
-                 mean = 0*df_donors$treatment + df_donors$marker,
-                 sd = 1)
-  u = rlogis(n = total_n_cells,
-             location = marker,
-             scale = 1)
-  y = rep(0,length(u))
-  y[u > 0] = 1
-  data.frame(y=factor(y,labels = c("LTNP","CP")),
-             marker,
-             donor=factor(df_donors$donor))
-}
-ggplot(data = fake_data(), aes(x = y,y = marker,color = donor)) + 
-  geom_point(position=position_jitter(w=0.3,h=0), size=4)
 n_sim = 1000
 power = sapply(1:n_sim,function(i) {
-  alpha = 0.1
+  alpha = 0.05
   fake = fake_data()
-  formula = as.formula(y ~ marker)
+  formula = as.formula(treatment ~ explanatory)
   res_glm = glm(formula,family = binomial(link='logit'), data = fake)
   #res_glm = mhglm(y ~ marker + (marker | donor),
   #                  family = binomial(link='logit'),
@@ -136,6 +147,10 @@ power = sapply(1:n_sim,function(i) {
   #                  control = mhglm.control(parallel = TRUE,fit.method = 'firthglm.fit'))
   pvalues = summary(res_glm)$coefficients[-1,4]
   mean(p.adjust(pvalues,method = "BH") < alpha)
+  # test
+  #groupCP = subset(fake,treatment == "CP")["explanatory"]
+  #groupLTNP = subset(fake,treatment == "LTNP")["explanatory"]
+  #t.test(groupCP,groupLTNP)$p.value < alpha
 })
 mean(power)
 ```
