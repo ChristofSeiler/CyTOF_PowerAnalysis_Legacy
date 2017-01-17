@@ -139,8 +139,8 @@ Power analysis for Generalized Linear Models (GLMs) without random effects.
 
 ```{r}
 alpha = 0.05
-n_sim = 100
-Ns = c(5,10)
+n_sim = 10
+Ns = c(15,30)
 markers_str = paste(colnames(Sigma),collapse = " + ")
 power_glm = function(n_donors) {
   sink("progress.log")
@@ -174,7 +174,7 @@ power_glmm = function(n_donors) {
                               paste("status ~",markers_str,"+",paste0("(",markers_str," | donor),")),
                               "family = binomial(link='logit'),",
                               "data = test,",
-                              "control = mhglm.control(parallel = TRUE,fit.method = 'firthglm.fit'))"))
+                              "control = mhglm.control(parallel = FALSE,fit.method = 'firthglm.fit'))"))
     res_glm = eval(formula_expr)
     pvalues = summary(res_glm)$coefficients[-1,4]
     mean(p.adjust(pvalues,method = "BH") < alpha)
