@@ -61,7 +61,6 @@ for(i in 1:nrow(interactions)) {
   edge = interactions[i,]
   adj_g[edge$from_id,edge$to_id] = 1
 }
-colnames(adj_g) = rownames(adj_g) = markers$protein_nk
 ```
 
 How does the covariance structure derived from STRING look like?
@@ -69,6 +68,7 @@ How does the covariance structure derived from STRING look like?
 ```{r}
 InvSigma = rgwish(n = 1,adj.g = adj_g,b = 3)[,,1]
 Sigma = chol2inv(chol(InvSigma))
+colnames(Sigma) = rownames(Sigma) = markers$protein_nk
 X = rmvnorm(n = 10000,sigma = Sigma)
 colnames(X) = markers$protein_nk
 ggcorr(X)
@@ -76,55 +76,68 @@ ggcorr(X)
 
 ## Fit Model and Calculate Power
 
-Fix samples sizes ``n`` and explanatory variable sizes ``p``. Simulate data.
+Power as a function of ICC:
+
+$$ \text{ICC} = \frac{\sigma_{\text{donor}}}{\sigma_{\text{donor}} + \sigma_{\text{cell}}} $$
+
+We use the multivariate generalization GICC introduced by Yue et al. 2015[^1].
 
 ```{r}
 fake_data = function(ICC) {
   # experimental design
   n_donors = 4
-  n_cells = 10
+  n_cells = 100
   donor = rep (1:n_donors, each=n_cells)
   status = rep(c( rep(-.5,n_cells),rep(.5,n_cells)),n_donors)
   # effect size
-  shift_cell = 0
-  sd_donor = ICC/(1-ICC)
-  sd_cell = 1
+  shift_cell = rep(0,p)
+  sd_donor = sum(diag(Sigma)) * ICC/(1-ICC)
+  #sd_cell = 1
   #ICC = sd_donor/(sd_donor+sd_cell)
   #ICC
   # donor level
   explanatory_donor = NULL
   for(j in 1:n_donors) {
-    explanatory_donor[j] = rnorm(n = 1,
-                                 mean = 0,
-                                 sd = sd_donor)
+    #explanatory_donor[j] = rnorm(n = 1,
+    #                             mean = 0,
+    #                             sd = sd_donor)
+    explanatory_donor[[j]] = rmvnorm(n = 1,
+                                     mean = rep(0,p),
+                                     sigma = sd_donor*diag(p)) %>% c
   }
   # cell level
-  explanatory = response = NULL
+  explanatory = NULL
   for(i in 1:(n_donors*n_cells)) {
-    explanatory[i] = rnorm(n = 1,
-                           mean = status[i]*shift_cell + explanatory_donor[donor[i]],
-                           sd = sd_cell)
+    #explanatory[i] = rnorm(n = 1,
+    #                       mean = status[i]*shift_cell + explanatory_donor[donor[i]],
+    #                       sd = sd_cell)
+    explanatory[[i]] = rmvnorm(n = 1,
+                               mean = ( status[i]*shift_cell + explanatory_donor[[donor[i]]] ) %>% c,
+                               sigma = Sigma)
   }
+  df_explanatory = do.call(rbind,explanatory) %>% data.frame
+  names(df_explanatory) = colnames(Sigma)
   data.frame(status = factor(status,labels = c("LTNP","CP")),
-             explanatory,
+             df_explanatory,
              donor = factor(donor))
 }
 test = fake_data(0.5)
-ggplot(test, aes(status,explanatory,color = donor)) + 
-  geom_point(position=position_jitter(w=0.3,h=0), size=4)
+ggplot(test, aes(status,PD1,color = donor)) + geom_point(position=position_jitter(w=0.3,h=0), size=4)
+ggplot(test, aes(status,Granzyme_B,color = donor)) + geom_point(position=position_jitter(w=0.3,h=0), size=4)
+ggplot(test, aes(status,CD19,color = donor)) + geom_point(position=position_jitter(w=0.3,h=0), size=4)
 ```
 
 Power analysis for Generalized Linear Models (GLMs) without random effects.
 
 ```{r}
 alpha = 0.05
-n_sim = 100
-ICCs = seq(0.1,0.9,0.1)
+n_sim = 10
+ICCs = c(0,0.5,0.99)
 power_glm = function(ICC) {
   power = sapply(1:n_sim,function(i) {
     cat(".")
     test = fake_data(ICC)
-    formula = as.formula(status ~ explanatory)
+    formula = as.formula(status ~ CD4)
     res_glm = glm(formula,family = binomial(link='logit'), data = test)
     pvalues = summary(res_glm)$coefficients[-1,4]
     mean(p.adjust(pvalues,method = "BH") < alpha)
@@ -145,10 +158,13 @@ power_glmm = function(ICC) {
   power = sapply(1:n_sim,function(i) {
     cat(".")
     test = fake_data(ICC)
-    res_glm = mhglm(status ~ explanatory + (explanatory | donor),
-                    family = binomial(link='logit'),
-                    data = test,
-                    control = mhglm.control(parallel = TRUE,fit.method = 'firthglm.fit'))
+    markers_str = "CD4"
+    formula_expr = parse(text = paste0("mhglm(",
+                              paste("status ~",markers_str,"+",paste0("(",markers_str," | donor),")),
+                              "family = binomial(link='logit'),",
+                              "data = test,",
+                              "control = mhglm.control(parallel = TRUE,fit.method = 'firthglm.fit'))"))
+    res_glm = eval(formula_expr)
     pvalues = summary(res_glm)$coefficients[-1,4]
     mean(p.adjust(pvalues,method = "BH") < alpha)
   })
@@ -166,3 +182,5 @@ ggplot(data.frame(ICCs,power),aes(ICCs,power)) +
 ```{r}
 sessionInfo()
 ```
+
+[^1]: Yue et al. (2015). Estimating a graphical intra-class correlation coefficient (GICC) using multivariate probit-linear mixed models
