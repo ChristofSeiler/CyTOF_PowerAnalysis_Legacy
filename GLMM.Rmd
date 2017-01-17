@@ -71,7 +71,7 @@ How does the covariance structure derived from STRING look like?
 InvSigma = rgwish(n = 1,adj.g = adj_g,b = 3)[,,1]
 Sigma = chol2inv(chol(InvSigma))
 colnames(Sigma) = rownames(Sigma) = markers$protein_nk
-X = rmvnorm(n = 10000,sigma = Sigma)
+X = rmvnorm(n = 100,sigma = Sigma)
 colnames(X) = markers$protein_nk
 ggcorr(X)
 ```
@@ -120,7 +120,8 @@ fake_data = function(n_donors) {
     #                       sd = sd_cell)
     explanatory[[i]] = rmvnorm(n = 1,
                                mean = ( status[i]*shift_cell + explanatory_donor[[donor[i]]] ) %>% c,
-                               sigma = Sigma)
+                               #sigma = Sigma)
+                               sigma = sum(diag(Sigma))/p*diag(p))
   }
   df_explanatory = do.call(rbind,explanatory) %>% data.frame
   names(df_explanatory) = colnames(Sigma)
