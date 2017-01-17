@@ -21,9 +21,7 @@ library(lme4)
 library(mbest)
 library(BDgraph)
 library(parallel)
-n_cores = as.integer(Sys.getenv("SLURM_NTASKS"))
-if(is.na(n_cores)) n_cores = 4
-n_cores
+n_cores = 16
 ```
 
 ## Goal
@@ -89,8 +87,8 @@ We use the multivariate generalization GICC introduced by Yue et al. 2015[^1].
 ```{r}
 fake_data = function(ICC) {
   # experimental design
-  n_donors = 4
-  n_cells = 100
+  n_donors = 30
+  n_cells = 10000
   donor = rep (1:n_donors, each=n_cells)
   status = rep(c( rep(-.5,n_cells),rep(.5,n_cells)),n_donors)
   # effect size
