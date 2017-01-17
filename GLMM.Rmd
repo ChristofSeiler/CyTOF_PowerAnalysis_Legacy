@@ -92,13 +92,10 @@ fake_data = function(n_donors) {
   donor = rep (1:n_donors, each=n_cells)
   status = rep(c( rep(-.5,n_cells),rep(.5,n_cells)),n_donors)
   # effect size
-  ICC = 0
+  ICC = 0.5
   sd_donor = sum(diag(Sigma))/p * ICC/(1-ICC)
   shift_cell = rep(0,p)
-  select_markers = sapply(c("PD1","Granzyme_B","CD19"),function(name) {
-    str_detect(name,colnames(Sigma)) %>% which
-  })
-  shift_cell[select_markers] = 10*sum(diag(Sigma))/p
+  shift_cell[select_markers] = 3*max(diag(Sigma))
   #sd_cell = 1
   #ICC = sd_donor/(sd_donor+sd_cell)
   #ICC
@@ -120,8 +117,8 @@ fake_data = function(n_donors) {
     #                       sd = sd_cell)
     explanatory[[i]] = rmvnorm(n = 1,
                                mean = ( status[i]*shift_cell + explanatory_donor[[donor[i]]] ) %>% c,
-                               #sigma = Sigma)
-                               sigma = sum(diag(Sigma))/p*diag(p))
+                               sigma = Sigma)
+                               #sigma = diag(p))
   }
   df_explanatory = do.call(rbind,explanatory) %>% data.frame
   names(df_explanatory) = colnames(Sigma)
@@ -129,6 +126,9 @@ fake_data = function(n_donors) {
              df_explanatory,
              donor = factor(donor))
 }
+select_markers = sapply("PD1",function(name) {
+  str_detect(name,colnames(Sigma)) %>% which
+})
 test = fake_data(10)
 ggplot(test, aes(status,PD1,color = donor)) + geom_boxplot()
 ggplot(test, aes(status,Granzyme_B,color = donor)) + geom_boxplot()
@@ -136,31 +136,42 @@ ggplot(test, aes(status,CD19,color = donor)) + geom_boxplot()
 ggplot(test, aes(status,NTB_A,color = donor)) + geom_boxplot()
 ```
 
+Parameters:
+
+```{r}
+fdr = 0.05
+n_sim = 16
+Ns = seq(10,60,10)
+markers_str = paste(colnames(Sigma),collapse = " + ")
+```
+
 Power analysis for Generalized Linear Models (GLMs) without random effects.
 
 ```{r}
-alpha = 0.05
-n_sim = 16
-Ns = c(30)
-markers_str = paste(colnames(Sigma),collapse = " + ")
 power_glm = function(n_donors) {
   sink("progress.log")
-  power = mclapply(1:n_sim,function(i) {
+  res = mclapply(1:n_sim,function(i) {
     cat(".")
     test = fake_data(n_donors)
     formula = as.formula( paste("status ~ ",markers_str) )
     res_glm = glm(formula,family = binomial(link='logit'), data = test)
     pvalues = summary(res_glm)$coefficients[-1,4]
-    mean(p.adjust(pvalues,method = "BH") < alpha)
-    }, mc.cores = n_cores) %>% simplify2array
+    pvalues_adj = p.adjust(pvalues,method = "BH")
+    type1 = mean(pvalues_adj[-select_markers] < fdr)
+    type2 = mean(pvalues_adj[select_markers] > fdr)
+    power = 1-type2
+    c(type1,type2,power)
+    }, mc.cores = n_cores) %>% simplify2array %>% t
   sink()
-  mean(power)
+  avg = colMeans(res)
+  c(Ns = n_donors,type1 = avg[1],type2 = avg[2],power = avg[3])
 }
-power = sapply(Ns,power_glm)
-ggplot(data.frame(Ns,power),aes(Ns,power)) + 
+df_power = lapply(Ns,power_glm) %>% do.call(rbind,.) %>% data.frame
+df_power = data.frame(df_power,fdr = alpha)
+df_power_long = melt(df_power, id="Ns")
+ggplot(data = df_power_long,aes(x = Ns,y = value, colour = variable)) + 
   geom_line() + geom_point() + 
-  labs(title = "GLM") + 
-  geom_hline(yintercept = alpha,color = "red")
+  labs(title = "GLM")
 ```
 
 Power analysis for Generalized Linear Mixed Models (GLMM) with random effects.
@@ -168,26 +179,32 @@ Power analysis for Generalized Linear Mixed Models (GLMM) with random effects.
 ```{r}
 power_glmm = function(n_donors) {
   sink("progress.log")
-  power = mclapply(1:n_sim,function(i) {
+  res = mclapply(1:n_sim,function(i) {
     cat(".")
     test = fake_data(n_donors)
     formula_expr = parse(text = paste0("mhglm(",
                               paste("status ~",markers_str,"+",paste0("(",markers_str," | donor),")),
                               "family = binomial(link='logit'),",
                               "data = test,",
-                              "control = mhglm.control(parallel = FALSE,fit.method = 'firthglm.fit'))"))
+                              "control = mhglm.control(parallel = TRUE,fit.method = 'firthglm.fit'))"))
     res_glm = eval(formula_expr)
     pvalues = summary(res_glm)$coefficients[-1,4]
-    mean(p.adjust(pvalues,method = "BH") < alpha)
+    pvalues_adj = p.adjust(pvalues,method = "BH")
+    type1 = mean(pvalues_adj[-select_markers] < fdr)
+    type2 = mean(pvalues_adj[select_markers] > fdr)
+    power = 1-type2
+    c(type1,type2,power)
   }, mc.cores = n_cores) %>% simplify2array
   sink()
-  mean(power)
+  avg = colMeans(res)
+  c(Ns = n_donors,type1 = avg[1],type2 = avg[2],power = avg[3])
 }
-power = sapply(Ns,power_glmm)
-ggplot(data.frame(Ns,power),aes(Ns,power)) + 
+df_power = lapply(Ns,power_glm) %>% do.call(rbind,.) %>% data.frame
+df_power = data.frame(df_power,fdr = alpha)
+df_power_long = melt(df_power, id="Ns")
+ggplot(data = df_power_long,aes(x = Ns,y = value, colour = variable)) + 
   geom_line() + geom_point() + 
-  labs(title = "GLMM") + 
-  geom_hline(yintercept = alpha,color = "red")
+  labs(title = "GLMM")
 ```
 
 ## Session Info

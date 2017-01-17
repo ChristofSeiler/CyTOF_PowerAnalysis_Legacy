@@ -3,7 +3,7 @@
 #SBATCH --job-name=GLMM
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=16
-#SBATCH --mem-per-cpu=4GB
+#SBATCH --mem-per-cpu=8GB
 #SBATCH --time=02:00:00
 #SBATCH --partition=bigmem
 #SBATCH --qos=bigmem
