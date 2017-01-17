@@ -20,6 +20,10 @@ library(GGally)
 library(lme4)
 library(mbest)
 library(BDgraph)
+library(parallel)
+n_cores = as.integer(Sys.getenv("SLURM_NTASKS"))
+if(is.na(n_cores)) n_cores = 4
+n_cores
 ```
 
 ## Goal
@@ -131,23 +135,26 @@ Power analysis for Generalized Linear Models (GLMs) without random effects.
 
 ```{r}
 alpha = 0.05
-n_sim = 10
-ICCs = c(0,0.5,0.99)
+n_sim = 100
+ICCs = c( 0,0.5,0.99 )
+markers_str = paste(colnames(Sigma),collapse = " + ")
 power_glm = function(ICC) {
-  power = sapply(1:n_sim,function(i) {
+  sink("progress.log")
+  power = mclapply(1:n_sim,function(i) {
     cat(".")
     test = fake_data(ICC)
-    formula = as.formula(status ~ CD4)
+    formula = as.formula( paste("status ~ ",markers_str) )
     res_glm = glm(formula,family = binomial(link='logit'), data = test)
     pvalues = summary(res_glm)$coefficients[-1,4]
     mean(p.adjust(pvalues,method = "BH") < alpha)
-    })
+    }, mc.cores = n_cores) %>% simplify2array
+  sink()
   mean(power)
 }
 power = sapply(ICCs,power_glm)
-ggplot(data.frame(ICCs,power),aes(ICCs,power)) + 
+ggplot(data.frame(ICC = ICCs,power),aes(ICC,power)) + 
   geom_line() + geom_point() + 
-  labs(title = paste0("alpha = ",alpha)) + 
+  labs(title = "GLM") + 
   geom_hline(yintercept = alpha,color = "red")
 ```
 
@@ -155,10 +162,10 @@ Power analysis for Generalized Linear Mixed Models (GLMM) with random effects.
 
 ```{r}
 power_glmm = function(ICC) {
-  power = sapply(1:n_sim,function(i) {
+  sink("progress.log")
+  power = mclapply(1:n_sim,function(i) {
     cat(".")
     test = fake_data(ICC)
-    markers_str = "CD4"
     formula_expr = parse(text = paste0("mhglm(",
                               paste("status ~",markers_str,"+",paste0("(",markers_str," | donor),")),
                               "family = binomial(link='logit'),",
@@ -167,13 +174,14 @@ power_glmm = function(ICC) {
     res_glm = eval(formula_expr)
     pvalues = summary(res_glm)$coefficients[-1,4]
     mean(p.adjust(pvalues,method = "BH") < alpha)
-  })
+  }, mc.cores = n_cores) %>% simplify2array
+  sink()
   mean(power)
 }
 power = sapply(ICCs,power_glmm)
-ggplot(data.frame(ICCs,power),aes(ICCs,power)) + 
+ggplot(data.frame(ICC = ICCs,power),aes(ICC,power)) + 
   geom_line() + geom_point() + 
-  labs(title = paste0("alpha = ",alpha)) +
+  labs(title = "GLMM") + 
   geom_hline(yintercept = alpha,color = "red")
 ```
 
