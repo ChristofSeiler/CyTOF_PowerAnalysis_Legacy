@@ -89,7 +89,7 @@ y = rmvt(n = 1,sigma = Sigma,df = v) %>% t
 Fix samples sizes ``n`` and explanatory variable sizes ``p``. Simulate data.
 
 ```{r}
-fake_data = function() {
+fake_data = function(ICC) {
   # experimental design
   n_donors = 4
   n_cells = 10
@@ -97,10 +97,10 @@ fake_data = function() {
   status = rep(c( rep(-.5,n_cells),rep(.5,n_cells)),n_donors)
   # effect size
   shift_cell = 0
-  sd_donor = 10
+  sd_donor = ICC/(1-ICC)
   sd_cell = 1
-  ICC = sd_donor/(sd_donor+sd_cell)
-  ICC
+  #ICC = sd_donor/(sd_donor+sd_cell)
+  #ICC
   # donor level
   explanatory_donor = NULL
   for(j in 1:n_donors) {
@@ -119,7 +119,7 @@ fake_data = function() {
              explanatory,
              donor = factor(donor))
 }
-test = fake_data()
+test = fake_data(0.5)
 ggplot(test, aes(status,explanatory,color = donor)) + 
   geom_point(position=position_jitter(w=0.3,h=0), size=4)
 ```
@@ -128,11 +128,12 @@ Power analysis for Generalized Linear Models (GLMs) without random effects.
 
 ```{r}
 alpha = 0.05
-n_sim = 10
-power_glm = function() {
+n_sim = 100
+ICCs = seq(0.1,0.9,0.1)
+power_glm = function(ICC) {
   power = sapply(1:n_sim,function(i) {
     cat(".")
-    test = fake_data()
+    test = fake_data(ICC)
     formula = as.formula(status ~ explanatory)
     res_glm = glm(formula,family = binomial(link='logit'), data = test)
     pvalues = summary(res_glm)$coefficients[-1,4]
@@ -140,16 +141,20 @@ power_glm = function() {
     })
   mean(power)
 }
-power_glm()
+power = sapply(ICCs,power_glm)
+ggplot(data.frame(ICCs,power),aes(ICCs,power)) + 
+  geom_line() + geom_point() + 
+  labs(title = paste0("alpha = ",alpha)) + 
+  geom_hline(yintercept = alpha,color = "red")
 ```
 
 Power analysis for Generalized Linear Mixed Models (GLMM) with random effects.
 
 ```{r}
-power_glmm = function() {
+power_glmm = function(ICC) {
   power = sapply(1:n_sim,function(i) {
     cat(".")
-    test = fake_data()
+    test = fake_data(ICC)
     res_glm = mhglm(status ~ explanatory + (explanatory | donor),
                     family = binomial(link='logit'),
                     data = test,
@@ -159,7 +164,11 @@ power_glmm = function() {
   })
   mean(power)
 }
-power_glmm()
+power = sapply(ICCs,power_glmm)
+ggplot(data.frame(ICCs,power),aes(ICCs,power)) + 
+  geom_line() + geom_point() + 
+  labs(title = paste0("alpha = ",alpha)) +
+  geom_hline(yintercept = alpha,color = "red")
 ```
 
 ## Session Info
