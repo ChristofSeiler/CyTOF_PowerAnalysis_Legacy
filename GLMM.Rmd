@@ -92,11 +92,11 @@ Fix samples sizes ``n`` and explanatory variable sizes ``p``. Simulate data.
 fake_data = function() {
   # experimental design
   n_donors = 4
-  n_cells = 100
+  n_cells = 10
   donor = rep (1:n_donors, each=n_cells)
-  treatment = rep(c( rep(-.5,n_cells/2),rep(.5,n_cells/2)),n_donors)
+  status = rep(c( rep(-.5,n_cells),rep(.5,n_cells)),n_donors)
   # effect size
-  shift_cell = 1
+  shift_cell = 0
   sd_donor = 10
   sd_cell = 1
   ICC = sd_donor/(sd_donor+sd_cell)
@@ -112,15 +112,15 @@ fake_data = function() {
   explanatory = response = NULL
   for(i in 1:(n_donors*n_cells)) {
     explanatory[i] = rnorm(n = 1,
-                           mean = treatment[i]*shift_cell + explanatory_donor[donor[i]],
+                           mean = status[i]*shift_cell + explanatory_donor[donor[i]],
                            sd = sd_cell)
   }
-  data.frame(treatment = factor(treatment,labels = c("LTNP","CP")),
+  data.frame(status = factor(status,labels = c("LTNP","CP")),
              explanatory,
              donor = factor(donor))
 }
 test = fake_data()
-ggplot(test, aes(treatment,explanatory,color = donor)) + 
+ggplot(test, aes(status,explanatory,color = donor)) + 
   geom_point(position=position_jitter(w=0.3,h=0), size=4)
 ```
 
@@ -129,31 +129,37 @@ Power analysis for Generalized Linear Models (GLMs) without random effects.
 ```{r}
 alpha = 0.05
 n_sim = 10
-power = sapply(1:n_sim,function(i) {
-  cat(".")
-  formula = as.formula(treatment ~ explanatory)
-  res_glm = glm(formula,family = binomial(link='logit'), data = test)
-  pvalues = summary(res_glm)$coefficients[-1,4]
-  mean(p.adjust(pvalues,method = "BH") < alpha)
-})
-mean(power)
+power_glm = function() {
+  power = sapply(1:n_sim,function(i) {
+    cat(".")
+    test = fake_data()
+    formula = as.formula(status ~ explanatory)
+    res_glm = glm(formula,family = binomial(link='logit'), data = test)
+    pvalues = summary(res_glm)$coefficients[-1,4]
+    mean(p.adjust(pvalues,method = "BH") < alpha)
+    })
+  mean(power)
+}
+power_glm()
 ```
 
 Power analysis for Generalized Linear Mixed Models (GLMM) with random effects.
 
 ```{r}
-n_sim = 10
-power = sapply(1:n_sim,function(i) {
-  cat(".")
-  test = fake_data()
-  res_glm = mhglm(treatment ~ explanatory + (explanatory | donor),
+power_glmm = function() {
+  power = sapply(1:n_sim,function(i) {
+    cat(".")
+    test = fake_data()
+    res_glm = mhglm(status ~ explanatory + (explanatory | donor),
                     family = binomial(link='logit'),
                     data = test,
                     control = mhglm.control(parallel = TRUE,fit.method = 'firthglm.fit'))
-  pvalues = summary(res_glm)$coefficients[-1,4]
-  mean(p.adjust(pvalues,method = "BH") < alpha)
-})
-mean(power)
+    pvalues = summary(res_glm)$coefficients[-1,4]
+    mean(p.adjust(pvalues,method = "BH") < alpha)
+  })
+  mean(power)
+}
+power_glmm()
 ```
 
 ## Session Info
