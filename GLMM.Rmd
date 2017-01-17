@@ -26,7 +26,7 @@ n_cores = 16
 
 ## Goal
 
-Power is the probability that an estimated treatment effect is statistically significantly positive. The goal is to evaluate power as a function of the Intraclass Correlation Coefficient (ICC) through simulations.
+Power is the probability that an estimated treatment effect is statistically significantly positive. The goal is to evaluate power as a function of the sample size.
 
 ## Prior Information on Protein-Protein Interaction
 
@@ -78,22 +78,27 @@ ggcorr(X)
 
 ## Fit Model and Calculate Power
 
-Power as a function of ICC:
+One of the key paramters is the Intraclass Correlation Coefficient (ICC):
 
 $$ \text{ICC} = \frac{\sigma_{\text{donor}}}{\sigma_{\text{donor}} + \sigma_{\text{cell}}} $$
 
-We use the multivariate generalization GICC introduced by Yue et al. 2015[^1].
+We use the multivariate generalization of ICC introduced by Yue et al. 2015[^1].
 
 ```{r}
-fake_data = function(ICC) {
+fake_data = function(n_donors) {
   # experimental design
-  n_donors = 30
-  n_cells = 10000
+  #n_donors = 30
+  n_cells = 1000
   donor = rep (1:n_donors, each=n_cells)
   status = rep(c( rep(-.5,n_cells),rep(.5,n_cells)),n_donors)
   # effect size
+  ICC = 0.5
+  sd_donor = sum(diag(Sigma))/p * ICC/(1-ICC)
   shift_cell = rep(0,p)
-  sd_donor = sum(diag(Sigma)) * ICC/(1-ICC)
+  select_markers = sapply(c("PD1","Granzyme_B","CD19"),function(name) {
+    str_detect(name,colnames(Sigma)) %>% which
+  })
+  shift_cell[select_markers] = 2*sd_donor
   #sd_cell = 1
   #ICC = sd_donor/(sd_donor+sd_cell)
   #ICC
@@ -123,10 +128,11 @@ fake_data = function(ICC) {
              df_explanatory,
              donor = factor(donor))
 }
-test = fake_data(0.5)
-ggplot(test, aes(status,PD1,color = donor)) + geom_point(position=position_jitter(w=0.3,h=0), size=4)
-ggplot(test, aes(status,Granzyme_B,color = donor)) + geom_point(position=position_jitter(w=0.3,h=0), size=4)
-ggplot(test, aes(status,CD19,color = donor)) + geom_point(position=position_jitter(w=0.3,h=0), size=4)
+test = fake_data(10)
+ggplot(test, aes(status,PD1,color = donor)) + geom_boxplot()
+ggplot(test, aes(status,Granzyme_B,color = donor)) + geom_boxplot()
+ggplot(test, aes(status,CD19,color = donor)) + geom_boxplot()
+ggplot(test, aes(status,NTB_A,color = donor)) + geom_boxplot()
 ```
 
 Power analysis for Generalized Linear Models (GLMs) without random effects.
@@ -134,13 +140,13 @@ Power analysis for Generalized Linear Models (GLMs) without random effects.
 ```{r}
 alpha = 0.05
 n_sim = 100
-ICCs = c( 0,0.5,0.99 )
+Ns = c(5,10)
 markers_str = paste(colnames(Sigma),collapse = " + ")
-power_glm = function(ICC) {
+power_glm = function(n_donors) {
   sink("progress.log")
   power = mclapply(1:n_sim,function(i) {
     cat(".")
-    test = fake_data(ICC)
+    test = fake_data(n_donors)
     formula = as.formula( paste("status ~ ",markers_str) )
     res_glm = glm(formula,family = binomial(link='logit'), data = test)
     pvalues = summary(res_glm)$coefficients[-1,4]
@@ -149,8 +155,8 @@ power_glm = function(ICC) {
   sink()
   mean(power)
 }
-power = sapply(ICCs,power_glm)
-ggplot(data.frame(ICC = ICCs,power),aes(ICC,power)) + 
+power = sapply(Ns,power_glm)
+ggplot(data.frame(Ns,power),aes(Ns,power)) + 
   geom_line() + geom_point() + 
   labs(title = "GLM") + 
   geom_hline(yintercept = alpha,color = "red")
@@ -159,11 +165,11 @@ ggplot(data.frame(ICC = ICCs,power),aes(ICC,power)) +
 Power analysis for Generalized Linear Mixed Models (GLMM) with random effects.
 
 ```{r}
-power_glmm = function(ICC) {
+power_glmm = function(n_donors) {
   sink("progress.log")
   power = mclapply(1:n_sim,function(i) {
     cat(".")
-    test = fake_data(ICC)
+    test = fake_data(n_donors)
     formula_expr = parse(text = paste0("mhglm(",
                               paste("status ~",markers_str,"+",paste0("(",markers_str," | donor),")),
                               "family = binomial(link='logit'),",
@@ -176,8 +182,8 @@ power_glmm = function(ICC) {
   sink()
   mean(power)
 }
-power = sapply(ICCs,power_glmm)
-ggplot(data.frame(ICC = ICCs,power),aes(ICC,power)) + 
+power = sapply(Ns,power_glmm)
+ggplot(data.frame(Ns,power),aes(Ns,power)) + 
   geom_line() + geom_point() + 
   labs(title = "GLMM") + 
   geom_hline(yintercept = alpha,color = "red")
