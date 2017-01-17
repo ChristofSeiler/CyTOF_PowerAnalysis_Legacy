@@ -140,7 +140,7 @@ Power analysis for Generalized Linear Models (GLMs) without random effects.
 ```{r}
 alpha = 0.05
 n_sim = 16
-Ns = c(5,10,15,30)
+Ns = c(30)
 markers_str = paste(colnames(Sigma),collapse = " + ")
 power_glm = function(n_donors) {
   sink("progress.log")
