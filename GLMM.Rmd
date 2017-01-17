@@ -88,17 +88,17 @@ We use the multivariate generalization of ICC introduced by Yue et al. 2015[^1].
 fake_data = function(n_donors) {
   # experimental design
   #n_donors = 30
-  n_cells = 1000
+  n_cells = 100
   donor = rep (1:n_donors, each=n_cells)
   status = rep(c( rep(-.5,n_cells),rep(.5,n_cells)),n_donors)
   # effect size
-  ICC = 0.5
+  ICC = 0.1
   sd_donor = sum(diag(Sigma))/p * ICC/(1-ICC)
   shift_cell = rep(0,p)
   select_markers = sapply(c("PD1","Granzyme_B","CD19"),function(name) {
     str_detect(name,colnames(Sigma)) %>% which
   })
-  shift_cell[select_markers] = 2*sd_donor
+  shift_cell[select_markers] = 10*sum(diag(Sigma))/p
   #sd_cell = 1
   #ICC = sd_donor/(sd_donor+sd_cell)
   #ICC
@@ -140,7 +140,7 @@ Power analysis for Generalized Linear Models (GLMs) without random effects.
 ```{r}
 alpha = 0.05
 n_sim = 10
-Ns = c(15,30)
+Ns = c(5,10,15,30)
 markers_str = paste(colnames(Sigma),collapse = " + ")
 power_glm = function(n_donors) {
   sink("progress.log")
