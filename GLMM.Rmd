@@ -92,7 +92,7 @@ fake_data = function(n_donors) {
   donor = rep (1:n_donors, each=n_cells)
   status = rep(c( rep(-.5,n_cells),rep(.5,n_cells)),n_donors)
   # effect size
-  ICC = 0.1
+  ICC = 0
   sd_donor = sum(diag(Sigma))/p * ICC/(1-ICC)
   shift_cell = rep(0,p)
   select_markers = sapply(c("PD1","Granzyme_B","CD19"),function(name) {
@@ -139,7 +139,7 @@ Power analysis for Generalized Linear Models (GLMs) without random effects.
 
 ```{r}
 alpha = 0.05
-n_sim = 10
+n_sim = 16
 Ns = c(5,10,15,30)
 markers_str = paste(colnames(Sigma),collapse = " + ")
 power_glm = function(n_donors) {
