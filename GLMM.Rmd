@@ -1,6 +1,10 @@
 ---
 title: "Power Analysis for CyTOF Experiments"
 output: html_document
+author: Christof Seiler
+date: January, 2017
+params:
+  ICC: "0"
 ---
 
 ```{r setup, include=FALSE}
@@ -24,6 +28,7 @@ library(BDgraph)
 library(parallel)
 n_cores = 16
 set.seed(12345)
+ICC = as.numeric(params$ICC)
 ```
 
 ## Goal
@@ -94,7 +99,7 @@ fake_data = function(n_donors) {
   donor = rep (1:n_donors, each=n_cells)
   status = rep(c( rep(-.5,n_cells),rep(.5,n_cells)),n_donors)
   # effect size
-  ICC = 0
+  #ICC = 0.99
   sd_donor = sum(diag(Sigma))/p * ICC/(1-ICC)
   shift_cell = rep(0,p)
   shift_cell[select_markers] = 5*diag(Sigma)[select_markers]
@@ -141,7 +146,6 @@ ggplot(test, aes(status,NTB_A,color = donor)) + geom_boxplot()
 Parameters:
 
 ```{r}
-fdr = 0.05
 n_sim = 16
 Ns = seq(10,60,10)
 markers_str = paste(colnames(Sigma),collapse = " + ")
@@ -149,7 +153,7 @@ markers_str = paste(colnames(Sigma),collapse = " + ")
 
 Power analysis for Generalized Linear Models (GLMs) without random effects.
 
-```{r eval=FALSE}
+```{r}
 power_glm = function(n_donors) {
   res = mclapply(1:n_sim,function(i) {
     cat(".")
@@ -158,10 +162,13 @@ power_glm = function(n_donors) {
     res_glm = glm(formula,family = binomial(link='logit'), data = test)
     pvalues = summary(res_glm)$coefficients[-1,4]
     pvalues_adj = p.adjust(pvalues,method = "BH")
-    type1 = mean(pvalues_adj[-select_markers] < fdr)
-    type2 = mean(pvalues_adj[select_markers] > fdr)
-    power = 1-type2
-    c(type1 = type1,type2 = type2,power = power)
+    #type1 = mean(pvalues_adj[-select_markers] < fdr)
+    #type2 = mean(pvalues_adj[select_markers] > fdr)
+    #power = 1-type2
+    #c(type1 = type1,type2 = type2,power = power)
+    others = pvalues_adj[-select_markers]
+    shifted = pvalues_adj[select_markers]
+    c(others = others,shifted = shifted)
     }, mc.cores = n_cores) %>% do.call(rbind,.) %>% data.frame
   cat("\n")
   c(Ns = n_donors,colMeans(res))
@@ -169,11 +176,15 @@ power_glm = function(n_donors) {
 sink("progress.log")
 df_power = lapply(Ns,power_glm) %>% do.call(rbind,.) %>% data.frame
 sink()
-df_power = data.frame(df_power,fdr = fdr)
+df_power = data.frame(df_power)
 df_power_long = melt(df_power, id="Ns")
-ggplot(data = df_power_long,aes(x = Ns,y = value, colour = variable)) + 
-  geom_line() + geom_point() + 
-  labs(title = "GLM")
+df_power_long = data.frame(df_power_long,effect = 
+                             factor(str_detect(df_power_long$variable,"shifted"),
+                                    labels = c("no","yes")))
+ggplot(data = df_power_long,aes(x = Ns,y = value, group = variable, color = effect)) + 
+  geom_line() + 
+  geom_point() + 
+  labs(title = "FDR vs. Sample Size for GLMs")
 ```
 
 Power analysis for Generalized Linear Mixed Models (GLMM) with random effects.
@@ -191,10 +202,9 @@ power_glmm = function(n_donors) {
     res_glm = eval(formula_expr)
     pvalues = summary(res_glm)$coefficients[-1,4]
     pvalues_adj = p.adjust(pvalues,method = "BH")
-    type1 = mean(pvalues_adj[-select_markers] < fdr)
-    type2 = mean(pvalues_adj[select_markers] > fdr)
-    power = 1-type2
-    c(type1 = type1,type2 = type2,power = power)
+    others = pvalues_adj[-select_markers]
+    shifted = pvalues_adj[select_markers]
+    c(others = others,shifted = shifted)
   }, mc.cores = n_cores) %>% do.call(rbind,.) %>% data.frame
   cat("\n")
   c(Ns = n_donors,colMeans(res))
@@ -202,11 +212,14 @@ power_glmm = function(n_donors) {
 sink("progress.log")
 df_power = lapply(Ns,power_glmm) %>% do.call(rbind,.) %>% data.frame
 sink()
-df_power = data.frame(df_power,fdr = fdr)
-df_power_long = melt(df_power, id="Ns")
-ggplot(data = df_power_long,aes(x = Ns,y = value, colour = variable)) + 
-  geom_line() + geom_point() + 
-  labs(title = "GLMM")
+df_power = data.frame(df_power)
+df_power_long = data.frame(df_power_long,effect = 
+                             factor(str_detect(df_power_long$variable,"shifted"),
+                                    labels = c("no","yes")))
+ggplot(data = df_power_long,aes(x = Ns,y = value, group = variable, color = effect)) + 
+  geom_line() + 
+  geom_point() + 
+  labs(title = "FDR vs. Sample Size for GLMMs")
 ```
 
 ## Session Info
