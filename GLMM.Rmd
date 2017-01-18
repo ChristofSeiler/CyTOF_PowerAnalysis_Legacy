@@ -147,7 +147,7 @@ ggplot(test, aes(status,NTB_A,color = donor)) + geom_boxplot()
 Parameters:
 
 ```{r}
-n_sim = 16
+n_sim = 160
 Ns = seq(10,60,10)
 markers_str = paste(colnames(Sigma),collapse = " + ")
 ```
