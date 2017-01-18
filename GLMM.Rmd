@@ -185,7 +185,8 @@ df_power_long = data.frame(df_power_long,effect =
 ggplot(data = df_power_long,aes(x = Ns,y = value, group = variable, color = effect)) + 
   geom_line() + 
   geom_point(position=position_jitter(w=2, h=0)) + 
-  labs(title = "FDR vs. Sample Size for GLMs")
+  labs(title = "FDR vs. Sample Size for GLMs") +
+  scale_y_continuous(breaks=seq(0,1,0.1),limits=c(0,1))
 ```
 
 Power analysis for Generalized Linear Mixed Models (GLMM) with random effects.
@@ -221,7 +222,8 @@ df_power_long = data.frame(df_power_long,effect =
 ggplot(data = df_power_long,aes(x = Ns,y = value, group = variable, color = effect)) + 
   geom_line() + 
   geom_point(position=position_jitter(w=2, h=0)) + 
-  labs(title = "FDR vs. Sample Size for GLMMs")
+  labs(title = "FDR vs. Sample Size for GLMMs") +
+  scale_y_continuous(breaks=seq(0,1,0.1),limits=c(0,1))
 ```
 
 ## Session Info
