@@ -103,7 +103,7 @@ fake_data = function(n_donors) {
   #ICC = 0.99
   sd_donor = sum(diag(Sigma))/p * ICC/(1-ICC)
   shift_cell = rep(0,p)
-  shift_cell[select_markers] = 5*diag(Sigma)[select_markers]
+  shift_cell[select_markers] = 2*diag(Sigma)[select_markers]
   #sd_cell = 1
   #ICC = sd_donor/(sd_donor+sd_cell)
   #ICC
@@ -134,11 +134,12 @@ fake_data = function(n_donors) {
              df_explanatory,
              donor = factor(donor))
 }
-select_markers = sapply("PD1",function(name) {
-  str_detect(name,colnames(Sigma)) %>% which
-})
+select_markers = which.max(diag(Sigma))
+#select_markers = sapply("PD1",function(name) {
+#  str_detect(name,colnames(Sigma)) %>% which
+#})
 test = fake_data(10)
-ggplot(test, aes(status,PD1,color = donor)) + geom_boxplot()
+ggplot(test, aes(status,ILT_2,color = donor)) + geom_boxplot()
 ggplot(test, aes(status,Granzyme_B,color = donor)) + geom_boxplot()
 ggplot(test, aes(status,CD19,color = donor)) + geom_boxplot()
 ggplot(test, aes(status,NTB_A,color = donor)) + geom_boxplot()
@@ -147,7 +148,7 @@ ggplot(test, aes(status,NTB_A,color = donor)) + geom_boxplot()
 Parameters:
 
 ```{r}
-n_sim = 160
+n_sim = 16
 Ns = seq(10,60,10)
 markers_str = paste(colnames(Sigma),collapse = " + ")
 ```
