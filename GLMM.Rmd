@@ -184,7 +184,7 @@ df_power_long = data.frame(df_power_long,effect =
                                     labels = c("no","yes")))
 ggplot(data = df_power_long,aes(x = Ns,y = value, group = variable, color = effect)) + 
   geom_line() + 
-  geom_point() + 
+  geom_point(position=position_jitter(w=2, h=0)) + 
   labs(title = "FDR vs. Sample Size for GLMs")
 ```
 
@@ -220,7 +220,7 @@ df_power_long = data.frame(df_power_long,effect =
                                     labels = c("no","yes")))
 ggplot(data = df_power_long,aes(x = Ns,y = value, group = variable, color = effect)) + 
   geom_line() + 
-  geom_point() + 
+  geom_point(position=position_jitter(w=2, h=0)) + 
   labs(title = "FDR vs. Sample Size for GLMMs")
 ```
 
