@@ -13,7 +13,8 @@ module load R/3.3.0
 start=`date +%s`
 
 # preprocessing and differential analysis
-R -e "rmarkdown::render('GLMM.Rmd')"
+ICC=$1
+R -e "rmarkdown::render('GLMM.Rmd',output_file = 'GLMM_${ICC}.html',params = list(ICC = '${ICC}')"
 
 end=`date +%s`
 runtime=$((end-start))

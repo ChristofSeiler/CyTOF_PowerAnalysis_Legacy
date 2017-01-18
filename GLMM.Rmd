@@ -29,6 +29,7 @@ library(parallel)
 n_cores = 16
 set.seed(12345)
 ICC = as.numeric(params$ICC)
+ICC
 ```
 
 ## Goal
@@ -213,6 +214,7 @@ sink("progress.log")
 df_power = lapply(Ns,power_glmm) %>% do.call(rbind,.) %>% data.frame
 sink()
 df_power = data.frame(df_power)
+df_power_long = melt(df_power, id="Ns")
 df_power_long = data.frame(df_power_long,effect = 
                              factor(str_detect(df_power_long$variable,"shifted"),
                                     labels = c("no","yes")))
