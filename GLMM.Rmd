@@ -96,7 +96,7 @@ We use the multivariate generalization of ICC introduced by Yue et al. 2015[^1].
 fake_data = function(n_donors) {
   # experimental design
   #n_donors = 30
-  n_cells = 1000
+  n_cells = 100
   donor = rep (1:n_donors, each=n_cells)
   status = rep(c( rep(-.5,n_cells),rep(.5,n_cells)),n_donors)
   # effect size
