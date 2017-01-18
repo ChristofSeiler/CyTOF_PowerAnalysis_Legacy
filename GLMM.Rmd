@@ -16,6 +16,7 @@ library(magrittr)
 library(stringr)
 library(STRINGdb)
 library(ggplot2)
+library(reshape2)
 library(GGally)
 library(lme4)
 library(mbest)
@@ -92,7 +93,7 @@ fake_data = function(n_donors) {
   donor = rep (1:n_donors, each=n_cells)
   status = rep(c( rep(-.5,n_cells),rep(.5,n_cells)),n_donors)
   # effect size
-  ICC = 0.5
+  ICC = 0
   sd_donor = sum(diag(Sigma))/p * ICC/(1-ICC)
   shift_cell = rep(0,p)
   shift_cell[select_markers] = 3*max(diag(Sigma))
@@ -147,7 +148,7 @@ markers_str = paste(colnames(Sigma),collapse = " + ")
 
 Power analysis for Generalized Linear Models (GLMs) without random effects.
 
-```{r}
+```{r eval=FALSE}
 power_glm = function(n_donors) {
   sink("progress.log")
   res = mclapply(1:n_sim,function(i) {
@@ -167,7 +168,7 @@ power_glm = function(n_donors) {
   c(Ns = n_donors,type1 = avg[1],type2 = avg[2],power = avg[3])
 }
 df_power = lapply(Ns,power_glm) %>% do.call(rbind,.) %>% data.frame
-df_power = data.frame(df_power,fdr = alpha)
+df_power = data.frame(df_power,fdr = fdr)
 df_power_long = melt(df_power, id="Ns")
 ggplot(data = df_power_long,aes(x = Ns,y = value, colour = variable)) + 
   geom_line() + geom_point() + 
@@ -186,7 +187,7 @@ power_glmm = function(n_donors) {
                               paste("status ~",markers_str,"+",paste0("(",markers_str," | donor),")),
                               "family = binomial(link='logit'),",
                               "data = test,",
-                              "control = mhglm.control(parallel = TRUE,fit.method = 'firthglm.fit'))"))
+                              "control = mhglm.control(parallel = FALSE,fit.method = 'firthglm.fit'))"))
     res_glm = eval(formula_expr)
     pvalues = summary(res_glm)$coefficients[-1,4]
     pvalues_adj = p.adjust(pvalues,method = "BH")
@@ -199,8 +200,8 @@ power_glmm = function(n_donors) {
   avg = colMeans(res)
   c(Ns = n_donors,type1 = avg[1],type2 = avg[2],power = avg[3])
 }
-df_power = lapply(Ns,power_glm) %>% do.call(rbind,.) %>% data.frame
-df_power = data.frame(df_power,fdr = alpha)
+df_power = lapply(Ns,power_glmm) %>% do.call(rbind,.) %>% data.frame
+df_power = data.frame(df_power,fdr = fdr)
 df_power_long = melt(df_power, id="Ns")
 ggplot(data = df_power_long,aes(x = Ns,y = value, colour = variable)) + 
   geom_line() + geom_point() + 
