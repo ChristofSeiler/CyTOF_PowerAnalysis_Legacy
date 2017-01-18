@@ -14,7 +14,7 @@ start=`date +%s`
 
 # preprocessing and differential analysis
 ICC=$1
-R -e "rmarkdown::render('GLMM.Rmd',output_file = 'GLMM_${ICC}.html',params = list(ICC = '${ICC}')"
+R -e "rmarkdown::render('GLMM.Rmd',output_file = 'GLMM_${ICC}.html',params = list(ICC = '${ICC}'))"
 
 end=`date +%s`
 runtime=$((end-start))
