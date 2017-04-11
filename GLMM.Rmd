@@ -147,7 +147,7 @@ select_markers = sample(length(colnames(Sigma)),size = 5)
 #select_markers = which.max(diag(Sigma))
 select_markers
 shift_sd = 0.5
-ICC = 0.1
+#ICC = 0.1
 #select_markers = sapply("PD1",function(name) {
 #  str_detect(name,colnames(Sigma)) %>% which
 #})
