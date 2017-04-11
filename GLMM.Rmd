@@ -103,7 +103,7 @@ fake_data = function(n_donors) {
   #ICC = 0.99
   sd_donor = sum(diag(Sigma))/p * ICC/(1-ICC)
   shift_cell = rep(0,p)
-  shift_cell[select_markers] = 2*diag(Sigma)[select_markers]
+  shift_cell[select_markers] = shift_sd*diag(Sigma)[select_markers]
   #sd_cell = 1
   #ICC = sd_donor/(sd_donor+sd_cell)
   #ICC
@@ -134,16 +134,6 @@ fake_data = function(n_donors) {
              df_explanatory,
              donor = factor(donor))
 }
-select_markers = which.max(diag(Sigma))
-select_markers
-#select_markers = sapply("PD1",function(name) {
-#  str_detect(name,colnames(Sigma)) %>% which
-#})
-test = fake_data(10)
-ggplot(test, aes(status,ILT_2,color = donor)) + geom_boxplot()
-ggplot(test, aes(status,Granzyme_B,color = donor)) + geom_boxplot()
-ggplot(test, aes(status,CD19,color = donor)) + geom_boxplot()
-ggplot(test, aes(status,NTB_A,color = donor)) + geom_boxplot()
 ```
 
 Parameters:
@@ -152,6 +142,20 @@ Parameters:
 n_sim = 16
 Ns = seq(10,60,10)
 markers_str = paste(colnames(Sigma),collapse = " + ")
+significance_level = 0.0001
+select_markers = sample(length(colnames(Sigma)),size = 5)
+#select_markers = which.max(diag(Sigma))
+select_markers
+shift_sd = 0.5
+ICC = 0.1
+#select_markers = sapply("PD1",function(name) {
+#  str_detect(name,colnames(Sigma)) %>% which
+#})
+test = fake_data(10)
+for(marker_name in colnames(Sigma)[select_markers]) 
+  print( ggplot(test, aes_string("status",marker_name,color = "donor")) + geom_boxplot() )
+for(marker_name in colnames(Sigma)[-select_markers]) 
+  print( ggplot(test, aes_string("status",marker_name,color = "donor")) + geom_boxplot() )
 ```
 
 Power analysis for Generalized Linear Models (GLMs) without random effects.
@@ -163,32 +167,31 @@ power_glm = function(n_donors) {
     test = fake_data(n_donors)
     formula = as.formula( paste("status ~ ",markers_str) )
     res_glm = glm(formula,family = binomial(link='logit'), data = test)
-    pvalues = summary(res_glm)$coefficients[-1,4]
-    pvalues_adj = p.adjust(pvalues,method = "BH")
-    #type1 = mean(pvalues_adj[-select_markers] < fdr)
-    #type2 = mean(pvalues_adj[select_markers] > fdr)
-    #power = 1-type2
-    #c(type1 = type1,type2 = type2,power = power)
-    others = pvalues_adj[-select_markers]
-    shifted = pvalues_adj[select_markers]
-    c(others = others,shifted = shifted)
+    pvalues = summary(res_glm)$coefficients[-1,4] %>% p.adjust(.,method = "BH")
+    # False Discorvery Rate (FDR)
+    false_positive = sum(pvalues[-select_markers] < significance_level)
+    true_positive = sum(pvalues[select_markers] < significance_level)
+    FDR = false_positive/(false_positive+true_positive)
+    # True Positive Rate (TPR)
+    false_negative = sum(pvalues[select_markers] > significance_level)
+    TPR = true_positive/(true_positive+false_negative)
+    c(n_donors = n_donors,
+      FDR = FDR,
+      TPR = TPR)
     }, mc.cores = n_cores) %>% do.call(rbind,.) %>% data.frame
   cat("\n")
-  c(Ns = n_donors,colMeans(res))
+  colMeans(res)
 }
 sink("progress.log")
 df_power = lapply(Ns,power_glm) %>% do.call(rbind,.) %>% data.frame
 sink()
-df_power = data.frame(df_power)
-df_power_long = melt(df_power, id="Ns")
-df_power_long = data.frame(df_power_long,effect = 
-                             factor(str_detect(df_power_long$variable,"shifted"),
-                                    labels = c("no","yes")))
-ggplot(data = df_power_long,aes(x = Ns,y = value, group = variable, color = effect)) + 
+df_power_long = melt(df_power, id="n_donors")
+ggplot(data = df_power_long,aes(x = n_donors,y = value, color = variable)) + 
   geom_line() + 
-  geom_point(position=position_jitter(w=2, h=0)) + 
-  labs(title = "FDR vs. Sample Size for GLMs") +
-  scale_y_continuous(breaks=seq(0,1,0.1),limits=c(0,1))
+  geom_point() +
+  labs(title = "Power Curve for GLMs") +
+  scale_y_continuous(breaks=seq(0,1,0.1),limits=c(0,1)) + 
+  scale_x_continuous(breaks=Ns,limits=c(min(Ns),max(Ns)))
 ```
 
 Power analysis for Generalized Linear Mixed Models (GLMM) with random effects.
@@ -205,27 +208,30 @@ power_glmm = function(n_donors) {
                               "control = mhglm.control(parallel = FALSE,fit.method = 'firthglm.fit'))"))
     res_glm = eval(formula_expr)
     pvalues = summary(res_glm)$coefficients[-1,4]
-    pvalues_adj = p.adjust(pvalues,method = "BH")
-    others = pvalues_adj[-select_markers]
-    shifted = pvalues_adj[select_markers]
-    c(others = others,shifted = shifted)
-  }, mc.cores = n_cores) %>% do.call(rbind,.) %>% data.frame
+    # False Discorvery Rate (FDR)
+    false_positive = sum(pvalues[-select_markers] < significance_level)
+    true_positive = sum(pvalues[select_markers] < significance_level)
+    FDR = false_positive/(false_positive+true_positive)
+    # True Positive Rate (TPR)
+    false_negative = sum(pvalues[select_markers] > significance_level)
+    TPR = true_positive/(true_positive+false_negative)
+    c(n_donors = n_donors,
+      FDR = FDR,
+      TPR = TPR)
+    }, mc.cores = n_cores) %>% do.call(rbind,.) %>% data.frame
   cat("\n")
-  c(Ns = n_donors,colMeans(res))
+  colMeans(res)
 }
 sink("progress.log")
 df_power = lapply(Ns,power_glmm) %>% do.call(rbind,.) %>% data.frame
 sink()
-df_power = data.frame(df_power)
-df_power_long = melt(df_power, id="Ns")
-df_power_long = data.frame(df_power_long,effect = 
-                             factor(str_detect(df_power_long$variable,"shifted"),
-                                    labels = c("no","yes")))
-ggplot(data = df_power_long,aes(x = Ns,y = value, group = variable, color = effect)) + 
+df_power_long = melt(df_power, id="n_donors")
+ggplot(data = df_power_long,aes(x = n_donors,y = value, color = variable)) + 
   geom_line() + 
-  geom_point(position=position_jitter(w=2, h=0)) + 
-  labs(title = "FDR vs. Sample Size for GLMMs") +
-  scale_y_continuous(breaks=seq(0,1,0.1),limits=c(0,1))
+  geom_point() +
+  labs(title = "Power Curve for GLMMs") +
+  scale_y_continuous(breaks=seq(0,1,0.1),limits=c(0,1)) +
+  scale_x_continuous(breaks=Ns,limits=c(min(Ns),max(Ns)))
 ```
 
 ## Session Info
