@@ -26,7 +26,7 @@ library(lme4)
 library(mbest)
 library(BDgraph)
 library(parallel)
-n_cores = 16
+n_cores = 4
 set.seed(12345)
 ICC = as.numeric(params$ICC)
 ICC
@@ -139,11 +139,12 @@ fake_data = function(n_donors) {
 Parameters:
 
 ```{r}
-n_sim = 16
+n_sim = 64
 Ns = seq(10,60,10)
 markers_str = paste(colnames(Sigma),collapse = " + ")
 significance_level = 0.01
-select_markers = sample(length(colnames(Sigma)),size = 5)
+select_markers = sort(diag(Sigma),decreasing = TRUE)[1:5]
+#select_markers = sample(length(colnames(Sigma)),size = 5)
 #select_markers = which.max(diag(Sigma))
 select_markers
 shift_sd = 0.3
@@ -196,7 +197,7 @@ ggplot(data = df_power_long,aes(x = n_donors,y = value, color = variable)) +
 
 Power analysis for Generalized Linear Mixed Models (GLMM) with random effects.
 
-```{r}
+```{r eval=FALSE}
 power_glmm = function(n_donors) {
   res = mclapply(1:n_sim,function(i) {
     cat(".")
